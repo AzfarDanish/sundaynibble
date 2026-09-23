@@ -1,4 +1,4 @@
-import { FLAVOUR_LABELS, formatRM, type OrderItemInput } from "./constants";
+import { FLAVOUR_LABELS, formatRM, paymentQrLabel, type OrderItemInput } from "./constants";
 
 export interface TelegramOrder {
   id: string;
@@ -13,6 +13,7 @@ export interface TelegramOrder {
   total: number;
   payment_method: string;
   receipt_url: string;
+  pay_to: string;
 }
 
 function deliveryLabel(value: string): string {
@@ -42,7 +43,9 @@ export function buildTelegramMessage(order: TelegramOrder): string {
   }
   lines.push("");
   lines.push(`Total: ${formatRM(order.total)}`);
-  lines.push(`Payment: ${order.payment_method === "cod" ? "Cash on Delivery" : "Online"}`);
+  lines.push(
+    `Payment: ${order.payment_method === "cod" ? "Cash on Delivery" : `Online · ${paymentQrLabel(order.pay_to)}`}`
+  );
   if (order.receipt_url) {
     lines.push(`Receipt: ${order.receipt_url}`);
   }

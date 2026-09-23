@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   BASE_PRICE,
-  BANK_QR_IMAGE,
   COOKED_FEE_PER_PACK,
   FLAVOURS,
   HERO_IMAGE,
+  PAYMENT_QRS,
   MAX_RECEIPT_BYTES,
   calcTotals,
   formatRM,
@@ -126,6 +126,14 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const [deliveryDetails, setDeliveryDetails] = useState("");
   const [notes, setNotes] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("online");
+  // QR carousel: BigPay first (index 0), then Maybank, then TNG.
+  const [qrIndex, setQrIndex] = useState(0);
+  const [qrDir, setQrDir] = useState(1);
+
+  function goQr(next: number) {
+    setQrDir(next > qrIndex ? 1 : -1);
+    setQrIndex(next);
+  }
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptName, setReceiptName] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -295,6 +303,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
           items,
           payment_method: payment,
           receipt_url: payment === "online" ? receiptUrl : "",
+          pay_to: payment === "online" ? PAYMENT_QRS[qrIndex].id : "",
         }),
       });
       const data = await res.json();
@@ -683,17 +692,71 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                   transition={spring}
                   className="mt-4"
                 >
-                  <div className="mx-auto w-full max-w-[240px] border border-zinc-200">
-                    <Image
-                      src={BANK_QR_IMAGE}
-                      alt="Bank QR for online payment"
-                      width={480}
-                      height={480}
-                      className="h-auto w-full"
-                    />
+                  <p className="text-center text-sm font-bold text-zinc-900">
+                    {PAYMENT_QRS[qrIndex].label}
+                    <span className="ml-2 font-normal text-zinc-400">
+                      {qrIndex + 1} / {PAYMENT_QRS.length}
+                    </span>
+                  </p>
+                  <div className="relative mx-auto mt-2 w-full max-w-[240px] overflow-hidden border border-zinc-200">
+                    <AnimatePresence initial={false} mode="popLayout" custom={qrDir}>
+                      <motion.div
+                        key={PAYMENT_QRS[qrIndex].id}
+                        custom={qrDir}
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 48 * qrDir }}
+                        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -48 * qrDir }}
+                        transition={spring}
+                      >
+                        <Image
+                          src={PAYMENT_QRS[qrIndex].image}
+                          alt={`${PAYMENT_QRS[qrIndex].label} QR for online payment`}
+                          width={480}
+                          height={480}
+                          className="h-auto w-full"
+                        />
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
-                  <p className="mt-2 text-center text-xs text-zinc-500">
-                    Scan to pay {formatRM(totals.total)}, then upload receipt.
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    {qrIndex > 0 ? (
+                      <motion.button
+                        type="button"
+                        whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+                        transition={quickSpring}
+                        onClick={() => goQr(qrIndex - 1)}
+                        className="pressable flex items-center gap-1 px-2 py-2 text-sm font-bold text-zinc-700"
+                        aria-label={`Previous QR: ${PAYMENT_QRS[qrIndex - 1].label}`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                          <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {PAYMENT_QRS[qrIndex - 1].label}
+                      </motion.button>
+                    ) : (
+                      <span />
+                    )}
+                    {qrIndex < PAYMENT_QRS.length - 1 ? (
+                      <motion.button
+                        type="button"
+                        whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+                        transition={quickSpring}
+                        onClick={() => goQr(qrIndex + 1)}
+                        className="pressable flex items-center gap-1 px-2 py-2 text-sm font-bold text-zinc-700"
+                        aria-label={`Next QR: ${PAYMENT_QRS[qrIndex + 1].label}`}
+                      >
+                        {PAYMENT_QRS[qrIndex + 1].label}
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                          <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </motion.button>
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                  <p className="mt-1 text-center text-xs text-zinc-500">
+                    Scan to pay {formatRM(totals.total)} via {PAYMENT_QRS[qrIndex].label}, then
+                    upload receipt.
                   </p>
                   <div className="mt-3">
                     <input

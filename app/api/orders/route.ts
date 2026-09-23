@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     total: data.total,
     payment_method: data.payment_method,
     receipt_url: data.receipt_url,
+    pay_to: data.pay_to,
     status: "new",
   });
 
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
     total: data.total,
     payment_method: data.payment_method,
     receipt_url: data.receipt_url,
+    pay_to: data.pay_to,
   });
 
   const telegram = await sendTelegramMessage(text);

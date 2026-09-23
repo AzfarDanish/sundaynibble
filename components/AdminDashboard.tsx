@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FLAVOUR_LABELS, formatRM } from "@/lib/constants";
+import { FLAVOUR_LABELS, formatRM, paymentQrLabel } from "@/lib/constants";
 
 interface Settings {
   is_available: boolean;
@@ -29,6 +29,7 @@ interface Order {
   status: string;
   payment_method: string;
   receipt_url: string;
+  pay_to: string;
 }
 
 const STATUS = ["new", "accepted", "preparing", "delivered", "cancelled"];
@@ -267,7 +268,10 @@ export default function AdminDashboard() {
               </ul>
               {o.notes && <p className="mt-1 text-xs text-zinc-500">Notes: {o.notes}</p>}
               <p className="mt-1 text-xs text-zinc-600">
-                Payment: {o.payment_method === "cod" ? "Cash on delivery" : "Online"}
+                Payment:{" "}
+                {o.payment_method === "cod"
+                  ? "Cash on delivery"
+                  : `Online · ${paymentQrLabel(o.pay_to || "")}`}
                 {o.receipt_url && (
                   <>
                     {" · "}

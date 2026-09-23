@@ -1,5 +1,6 @@
 import {
   FLAVOUR_IDS,
+  PAYMENT_QR_IDS,
   calcTotals,
   type DeliveryLocationType,
   type FlavourId,
@@ -20,6 +21,7 @@ export interface OrderInput {
   items: OrderItemInput[];
   payment_method: PaymentMethod;
   receipt_url: string;
+  pay_to: string;
 }
 
 export function normalizeGender(value: string): Gender | null {
@@ -139,9 +141,13 @@ export function validateOrderInput(body: unknown): {
     return { ok: false, error: "Please choose a payment method." };
   }
   const receipt_url = String(b.receipt_url ?? "").trim().slice(0, 1000);
+  const pay_to = String(b.pay_to ?? "").trim().slice(0, 50);
   if (payment_method === "online") {
     if (!receipt_url || !/^https?:\/\/.+\..+/.test(receipt_url)) {
       return { ok: false, error: "Please upload your payment receipt." };
+    }
+    if (!PAYMENT_QR_IDS.includes(pay_to)) {
+      return { ok: false, error: "Please choose which QR you paid to." };
     }
   }
 
@@ -158,6 +164,7 @@ export function validateOrderInput(body: unknown): {
       items,
       payment_method,
       receipt_url: payment_method === "online" ? receipt_url : "",
+      pay_to: payment_method === "online" ? pay_to : "",
       subtotal: totals.subtotal,
       cookedFee: totals.cookedFee,
       deliveryFee: totals.deliveryFee,

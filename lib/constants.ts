@@ -1,10 +1,28 @@
 export const BASE_PRICE = 5.5;
 export const COOKED_FEE_PER_PACK = 1.0;
 export const DELIVERY_FEE = 0;
-export const BANK_QR_IMAGE = "/assets/bank-qr.jpg";
 export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export type PaymentMethod = "online" | "cod";
+
+export interface PaymentQr {
+  id: string;
+  label: string;
+  image: string;
+}
+
+// Carousel order: BigPay is the main/first QR.
+export const PAYMENT_QRS: PaymentQr[] = [
+  { id: "bigpay", label: "BigPay", image: "/assets/bigpay.jpg" },
+  { id: "maybank", label: "Maybank", image: "/assets/maybank.png" },
+  { id: "tng", label: "TNG", image: "/assets/tng.jpg" },
+];
+
+export const PAYMENT_QR_IDS = PAYMENT_QRS.map((q) => q.id);
+
+export function paymentQrLabel(id: string): string {
+  return PAYMENT_QRS.find((q) => q.id === id)?.label ?? id;
+}
 
 export type FlavourId = "carbonara" | "quattro_cheese" | "cheese";
 
