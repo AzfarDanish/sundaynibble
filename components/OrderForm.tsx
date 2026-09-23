@@ -19,12 +19,15 @@ import {
   type PaymentMethod,
 } from "@/lib/constants";
 import { getSupabaseAnonClient } from "@/lib/supabase";
+import type { StoreState } from "@/lib/store";
 
 export interface InitialSettings {
   is_available: boolean;
+  accepting_orders: boolean;
   open_time: string;
   close_time: string;
   status_message: string;
+  state: StoreState;
   is_open: boolean;
 }
 
@@ -252,7 +255,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
     }
   }
 
-  const open = settings.is_open;
+  const state: StoreState = settings.state ?? (settings.is_open ? "open" : "closed");
+  const open = state === "open";
+  const paused = state === "paused";
 
   return (
     <div className="mx-auto w-full max-w-2xl overflow-x-clip pb-36 lg:max-w-5xl lg:pb-10">
@@ -264,16 +269,20 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
           </p>
           <AnimatePresence initial={false} mode="wait">
             <motion.p
-              key={open ? "open" : "closed"}
+              key={state}
               initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
               transition={quickSpring}
-              className={`shrink-0 whitespace-nowrap text-xs font-bold ${open ? "text-green-700" : "text-red-600"}`}
+              className={`shrink-0 whitespace-nowrap text-xs font-bold ${
+                open ? "text-green-700" : paused ? "text-amber-600" : "text-red-600"
+              }`}
             >
               {open
                 ? `Open · ${shortTime(settings.open_time)}–${shortTime(settings.close_time)}`
-                : `Closed · ${shortTime(settings.open_time)}–${shortTime(settings.close_time)}`}
+                : paused
+                  ? "Paused · back soon"
+                  : `Closed · ${shortTime(settings.open_time)}–${shortTime(settings.close_time)}`}
             </motion.p>
           </AnimatePresence>
         </div>
@@ -789,7 +798,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                   ? "Placing order…"
                   : open
                     ? `Place order · ${formatRM(totals.total)}`
-                    : "Currently closed"}
+                    : paused
+                      ? "Paused — not taking orders"
+                      : "Currently closed"}
               </motion.button>
               <p className="mt-1.5 text-center text-[11px] leading-relaxed text-zinc-500 lg:mt-2 lg:text-xs">
                 Selling {shortTime(settings.open_time)}–{shortTime(settings.close_time)} · Free
@@ -824,11 +835,12 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
               className="w-full max-w-sm border-t-2 border-red-600 bg-white p-6"
             >
               <h2 id="closed-title" className="text-lg font-extrabold text-zinc-900">
-                We&apos;re closed right now
+                {paused ? "Paused for now" : "We\u2019re closed right now"}
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-                Selling hours are {shortTime(settings.open_time)}–
-                {shortTime(settings.close_time)} daily.
+                {paused
+                  ? "We\u2019re not taking orders right now, even though we\u2019re in selling hours. Please check back soon."
+                  : `Selling hours are ${shortTime(settings.open_time)}–${shortTime(settings.close_time)} daily.`}
                 {settings.status_message ? ` ${settings.status_message}` : ""}
               </p>
               <motion.button

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase";
-import { getStoreSettings, isStoreOpen } from "@/lib/store";
+import { getStoreSettings, getStoreState } from "@/lib/store";
 import { buildTelegramMessage, sendTelegramMessage } from "@/lib/telegram";
 import { validateOrderInput } from "@/lib/validation";
 
@@ -21,7 +21,18 @@ export async function POST(request: Request) {
   const data = validated.data;
 
   const settings = await getStoreSettings();
-  if (!isStoreOpen(settings)) {
+  const state = getStoreState(settings);
+  if (state === "paused") {
+    return Response.json(
+      {
+        error:
+          settings.status_message ||
+          "Sorry, we're not taking orders right now. Please check back soon.",
+      },
+      { status: 403 }
+    );
+  }
+  if (state === "closed") {
     const msg =
       settings.status_message ||
       `Sorry, we are closed. Selling hours ${settings.open_time.slice(0, 5)}–${settings.close_time.slice(0, 5)}.`;

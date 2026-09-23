@@ -6,6 +6,7 @@ import { FLAVOUR_LABELS, formatRM } from "@/lib/constants";
 
 interface Settings {
   is_available: boolean;
+  accepting_orders: boolean;
   open_time: string;
   close_time: string;
   status_message: string;
@@ -163,6 +164,15 @@ export default function AdminDashboard() {
                 className="h-4 w-4 accent-red-600"
               />
               Available (store open indicator)
+            </label>
+            <label className="flex items-center gap-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                checked={settings.accepting_orders ?? true}
+                onChange={(e) => setSettings({ ...settings, accepting_orders: e.target.checked })}
+                className="h-4 w-4 accent-red-600"
+              />
+              Taking orders right now
             </label>
             <label className="block text-xs font-semibold text-zinc-700">
               Status message

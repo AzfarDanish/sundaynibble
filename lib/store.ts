@@ -1,8 +1,11 @@
 import { getSupabaseAnonClient } from "./supabase";
 
+export type StoreState = "open" | "paused" | "closed";
+
 export interface StoreSettings {
   id: string;
   is_available: boolean;
+  accepting_orders: boolean;
   open_time: string; // "17:00:00"
   close_time: string; // "23:30:00"
   status_message: string;
@@ -12,6 +15,7 @@ export interface StoreSettings {
 export const DEFAULT_SETTINGS: StoreSettings = {
   id: "main",
   is_available: true,
+  accepting_orders: true,
   open_time: "17:00:00",
   close_time: "23:30:00",
   status_message: "",
@@ -67,7 +71,16 @@ export function isWithinSellingHours(
   return nowMinutes >= open || nowMinutes <= close;
 }
 
+export function getStoreState(
+  settings: StoreSettings,
+  now: Date = getMalaysiaNow()
+): StoreState {
+  if (!settings.is_available) return "closed";
+  if (!isWithinSellingHours(settings.open_time, settings.close_time, now)) return "closed";
+  if (!settings.accepting_orders) return "paused";
+  return "open";
+}
+
 export function isStoreOpen(settings: StoreSettings, now: Date = getMalaysiaNow()): boolean {
-  if (!settings.is_available) return false;
-  return isWithinSellingHours(settings.open_time, settings.close_time, now);
+  return getStoreState(settings, now) === "open";
 }

@@ -46,6 +46,7 @@ export async function PUT(request: Request) {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
   const is_available = Boolean(body.is_available);
+  const accepting_orders = Boolean(body.accepting_orders);
   const open_time = validTime(body.open_time);
   const close_time = validTime(body.close_time);
   const status_message = String(body.status_message ?? "").slice(0, 300);
@@ -57,6 +58,7 @@ export async function PUT(request: Request) {
     .from("store_settings")
     .update({
       is_available,
+      accepting_orders,
       open_time,
       close_time,
       status_message,
