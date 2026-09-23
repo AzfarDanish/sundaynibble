@@ -39,22 +39,85 @@ function shortTime(t: string): string {
   return t.slice(0, 5);
 }
 
+function QtyStepper({
+  label,
+  price,
+  value,
+  onLess,
+  onMore,
+  lessLabel,
+  moreLabel,
+  reduceMotion,
+  quickSpring,
+}: {
+  label: string;
+  price: string;
+  value: number;
+  onLess: () => void;
+  onMore: () => void;
+  lessLabel: string;
+  moreLabel: string;
+  reduceMotion: boolean;
+  quickSpring: { duration: number } | { type: "spring"; bounce: number; duration: number };
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <p className="min-w-0 text-xs text-zinc-600">
+        {label} <span className="font-semibold text-zinc-800">{price}</span>
+      </p>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <motion.button
+          type="button"
+          whileTap={reduceMotion ? undefined : { scale: 0.88 }}
+          transition={quickSpring}
+          onClick={onLess}
+          className="pressable h-8 w-8 rounded-full border border-zinc-300 text-base font-bold text-zinc-700"
+          aria-label={lessLabel}
+        >
+          −
+        </motion.button>
+        <span className="relative flex w-5 justify-center overflow-hidden text-center text-sm font-bold tabular-nums">
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.span
+              key={value}
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+              transition={quickSpring}
+            >
+              {value}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+        <motion.button
+          type="button"
+          whileTap={reduceMotion ? undefined : { scale: 0.88 }}
+          transition={quickSpring}
+          onClick={onMore}
+          className="pressable h-8 w-8 rounded-full border border-zinc-300 text-base font-bold text-zinc-700"
+          aria-label={moreLabel}
+        >
+          +
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const reduceMotion = useReducedMotion() ?? false;
   const spring = reduceMotion ? { duration: 0 } : SPRING;
   const quickSpring = reduceMotion ? { duration: 0 } : QUICK_SPRING;
 
   const [settings, setSettings] = useState<InitialSettings>(initial);
-  const [qty, setQty] = useState<Record<FlavourId, number>>({
-    carbonara: 0,
-    quattro_cheese: 0,
-    cheese: 0,
+  // Per flavour, original and cooked-ready amounts are tracked separately,
+  // so one order can mix e.g. 2 plain + 1 cooked of the same flavour.
+  const [amounts, setAmounts] = useState<Record<FlavourId, { plain: number; cooked: number }>>({
+    carbonara: { plain: 0, cooked: 0 },
+    quattro_cheese: { plain: 0, cooked: 0 },
+    cheese: { plain: 0, cooked: 0 },
   });
-  const [cooked, setCooked] = useState<Record<FlavourId, boolean>>({
-    carbonara: false,
-    quattro_cheese: false,
-    cheese: false,
-  });
+  const [viewImage, setViewImage] = useState<{ label: string; image: string } | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
@@ -113,12 +176,14 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
 
   const items = useMemo(
     () =>
-      FLAVOURS.filter((f) => qty[f.id] > 0).map((f) => ({
-        flavour: f.id,
-        quantity: qty[f.id],
-        cooked: cooked[f.id],
-      })),
-    [qty, cooked]
+      FLAVOURS.flatMap((f) => {
+        const a = amounts[f.id];
+        const lines = [];
+        if (a.plain > 0) lines.push({ flavour: f.id, quantity: a.plain, cooked: false });
+        if (a.cooked > 0) lines.push({ flavour: f.id, quantity: a.cooked, cooked: true });
+        return lines;
+      }),
+    [amounts]
   );
 
   const totals = useMemo(() => calcTotals(items), [items]);
@@ -143,10 +208,10 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
           ? "Add block + room number for door-to-door delivery"
           : "Free delivery at all kamsis";
 
-  function changeQty(id: FlavourId, delta: number) {
-    setQty((prev) => {
-      const next = Math.max(0, Math.min(20, prev[id] + delta));
-      return { ...prev, [id]: next };
+  function changeQty(id: FlavourId, kind: "plain" | "cooked", delta: number) {
+    setAmounts((prev) => {
+      const next = Math.max(0, Math.min(20, prev[id][kind] + delta));
+      return { ...prev, [id]: { ...prev[id], [kind]: next } };
     });
   }
 
@@ -245,8 +310,11 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
           // haptics are best-effort
         }
       }
-      setQty({ carbonara: 0, quattro_cheese: 0, cheese: 0 });
-      setCooked({ carbonara: false, quattro_cheese: false, cheese: false });
+      setAmounts({
+        carbonara: { plain: 0, cooked: 0 },
+        quattro_cheese: { plain: 0, cooked: 0 },
+        cheese: { plain: 0, cooked: 0 },
+      });
       removeReceipt();
     } catch {
       setError("Network error. Please try again.");
@@ -349,9 +417,16 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                   initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
                   animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   transition={spring}
-                  className="flex items-center gap-3 px-5 py-3.5"
+                  className="flex items-start gap-3 px-5 py-3.5"
                 >
-                  <div className="relative h-16 w-16 shrink-0">
+                  <motion.button
+                    type="button"
+                    whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+                    transition={quickSpring}
+                    onClick={() => setViewImage({ label: f.label, image: f.image })}
+                    className="pressable relative h-16 w-16 shrink-0 cursor-zoom-in"
+                    aria-label={`View ${f.label} packaging`}
+                  >
                     <Image
                       src={f.image}
                       alt={f.label}
@@ -359,56 +434,31 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                       className="object-contain"
                       sizes="64px"
                     />
-                  </div>
+                  </motion.button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold leading-snug text-zinc-900">{f.label}</p>
-                    <p className="text-xs text-zinc-500">{formatRM(BASE_PRICE)}</p>
-                    <label className="pressable mt-1 flex cursor-pointer items-center gap-1.5 rounded text-xs text-zinc-600">
-                      <input
-                        type="checkbox"
-                        checked={cooked[f.id]}
-                        onChange={(e) =>
-                          setCooked((prev) => ({ ...prev, [f.id]: e.target.checked }))
-                        }
-                        className="h-4 w-4 accent-red-600"
-                      />
-                      Cooked ready (+{formatRM(COOKED_FEE_PER_PACK)})
-                    </label>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <motion.button
-                      type="button"
-                      whileTap={reduceMotion ? undefined : { scale: 0.88 }}
-                      transition={quickSpring}
-                      onClick={() => changeQty(f.id, -1)}
-                      className="pressable h-9 w-9 rounded-full border border-zinc-300 text-lg font-bold text-zinc-700"
-                      aria-label={`Less ${f.label}`}
-                    >
-                      −
-                    </motion.button>
-                    <span className="relative flex w-6 justify-center overflow-hidden text-center text-base font-bold tabular-nums">
-                      <AnimatePresence initial={false} mode="popLayout">
-                        <motion.span
-                          key={qty[f.id]}
-                          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                          transition={quickSpring}
-                        >
-                          {qty[f.id]}
-                        </motion.span>
-                      </AnimatePresence>
-                    </span>
-                    <motion.button
-                      type="button"
-                      whileTap={reduceMotion ? undefined : { scale: 0.88 }}
-                      transition={quickSpring}
-                      onClick={() => changeQty(f.id, 1)}
-                      className="pressable h-9 w-9 rounded-full border border-zinc-300 text-lg font-bold text-zinc-700"
-                      aria-label={`More ${f.label}`}
-                    >
-                      +
-                    </motion.button>
+                    <QtyStepper
+                      label="Original"
+                      price={formatRM(BASE_PRICE)}
+                      value={amounts[f.id].plain}
+                      onLess={() => changeQty(f.id, "plain", -1)}
+                      onMore={() => changeQty(f.id, "plain", 1)}
+                      lessLabel={`Less original ${f.label}`}
+                      moreLabel={`More original ${f.label}`}
+                      reduceMotion={reduceMotion}
+                      quickSpring={quickSpring}
+                    />
+                    <QtyStepper
+                      label="Cooked ready"
+                      price={formatRM(BASE_PRICE + COOKED_FEE_PER_PACK)}
+                      value={amounts[f.id].cooked}
+                      onLess={() => changeQty(f.id, "cooked", -1)}
+                      onMore={() => changeQty(f.id, "cooked", 1)}
+                      lessLabel={`Less cooked ${f.label}`}
+                      moreLabel={`More cooked ${f.label}`}
+                      reduceMotion={reduceMotion}
+                      quickSpring={quickSpring}
+                    />
                   </div>
                 </motion.li>
               ))}
@@ -854,6 +904,54 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                 Browse anyway
               </motion.button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Flavour image viewer — tap a thumbnail to see the packaging large */}
+      <AnimatePresence>
+        {viewImage && (
+          <motion.div
+            key="flavour-viewer"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={quickSpring}
+            onClick={() => setViewImage(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          >
+            <motion.figure
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${viewImage.label} packaging`}
+              onClick={(e) => e.stopPropagation()}
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+              transition={spring}
+              className="w-full max-w-sm bg-white p-4"
+            >
+              <div className="relative h-72 w-full">
+                <Image
+                  src={viewImage.image}
+                  alt={`${viewImage.label} packaging`}
+                  fill
+                  className="object-contain"
+                  sizes="(max-width: 640px) 90vw, 400px"
+                />
+              </div>
+              <figcaption className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-zinc-900">{viewImage.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setViewImage(null)}
+                  autoFocus
+                  className="pressable px-3 py-1.5 text-sm font-bold text-red-600"
+                >
+                  Close
+                </button>
+              </figcaption>
+            </motion.figure>
           </motion.div>
         )}
       </AnimatePresence>

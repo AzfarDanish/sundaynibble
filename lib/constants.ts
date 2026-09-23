@@ -68,6 +68,15 @@ export function formatRM(value: number): string {
   return `RM${value.toFixed(2)}`;
 }
 
+// Prices in sen (integer cents) — the single source of truth for money math.
+// All totals are accumulated as integers so results are exact (no 0.1+0.2 drift);
+// RM values are derived only at the boundary for display/storage.
+export const BASE_PRICE_SEN = 550;
+export const COOKED_FEE_PER_PACK_SEN = 100;
+export const DELIVERY_FEE_SEN = 0;
+
+const senToRm = (sen: number): number => sen / 100;
+
 export function calcTotals(items: OrderItemInput[]): {
   subtotal: number;
   cookedFee: number;
@@ -76,22 +85,22 @@ export function calcTotals(items: OrderItemInput[]): {
   totalQuantity: number;
 } {
   let totalQuantity = 0;
-  let subtotal = 0;
-  let cookedFee = 0;
+  let subtotalSen = 0;
+  let cookedFeeSen = 0;
   for (const item of items) {
-    totalQuantity += item.quantity;
-    subtotal += item.quantity * BASE_PRICE;
+    const q = Math.trunc(item.quantity);
+    totalQuantity += q;
+    subtotalSen += q * BASE_PRICE_SEN;
     if (item.cooked) {
-      cookedFee += item.quantity * COOKED_FEE_PER_PACK;
+      cookedFeeSen += q * COOKED_FEE_PER_PACK_SEN;
     }
   }
-  const deliveryFee = DELIVERY_FEE;
-  const total = subtotal + cookedFee + deliveryFee;
+  const deliveryFeeSen = DELIVERY_FEE_SEN;
   return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    cookedFee: Math.round(cookedFee * 100) / 100,
-    deliveryFee,
-    total: Math.round(total * 100) / 100,
+    subtotal: senToRm(subtotalSen),
+    cookedFee: senToRm(cookedFeeSen),
+    deliveryFee: senToRm(deliveryFeeSen),
+    total: senToRm(subtotalSen + cookedFeeSen + deliveryFeeSen),
     totalQuantity,
   };
 }
