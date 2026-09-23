@@ -75,7 +75,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
     let cancelled = false;
     async function refresh() {
       try {
-        const res = await fetch("/sundaynibble/api/settings", { cache: "no-store" });
+        const res = await fetch("/api/settings", { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -213,7 +213,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/sundaynibble/api/orders", {
+      const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

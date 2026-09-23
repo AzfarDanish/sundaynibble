@@ -45,8 +45,8 @@ export default function AdminDashboard() {
     setError("");
     try {
       const [sRes, oRes] = await Promise.all([
-        fetch("/sundaynibble/api/admin/settings", { cache: "no-store" }),
-        fetch(`/sundaynibble/api/admin/orders?limit=100${filter ? `&status=${filter}` : ""}`, {
+        fetch("/api/admin/settings", { cache: "no-store" }),
+        fetch(`/api/admin/orders?limit=100${filter ? `&status=${filter}` : ""}`, {
           cache: "no-store",
         }),
       ]);
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/sundaynibble/api/admin/settings", {
+      const res = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
 
   async function setStatus(id: string, status: string) {
     try {
-      const res = await fetch("/sundaynibble/api/admin/orders", {
+      const res = await fetch("/api/admin/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status }),
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
   }
 
   async function logout() {
-    await fetch("/sundaynibble/api/admin/logout", { method: "POST" });
+    await fetch("/api/admin/logout", { method: "POST" });
     window.location.reload();
   }
 

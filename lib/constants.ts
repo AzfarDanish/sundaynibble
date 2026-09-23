@@ -1,7 +1,7 @@
 export const BASE_PRICE = 5.5;
 export const COOKED_FEE_PER_PACK = 1.0;
 export const DELIVERY_FEE = 0;
-export const BANK_QR_IMAGE = "/sundaynibble/assets/bank-qr.jpg";
+export const BANK_QR_IMAGE = "/assets/bank-qr.jpg";
 export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export type PaymentMethod = "online" | "cod";
@@ -19,19 +19,19 @@ export const FLAVOURS: Flavour[] = [
   {
     id: "carbonara",
     label: "Carbonara",
-    image: "/sundaynibble/assets/carbonara.png",
+    image: "/assets/carbonara.png",
     description: "Creamy carbonara Buldak",
   },
   {
     id: "quattro_cheese",
     label: "Quattro Cheese",
-    image: "/sundaynibble/assets/quattro cheese.png",
+    image: "/assets/quattro cheese.png",
     description: "Four cheese Buldak",
   },
   {
     id: "cheese",
     label: "Cheese",
-    image: "/sundaynibble/assets/cheese.png",
+    image: "/assets/cheese.png",
     description: "Classic cheese Buldak",
   },
 ];
@@ -56,7 +56,7 @@ export type Gender = "boy" | "girl";
 
 export type DeliveryLocationType = "cafeteria" | "lobby" | "door_to_door" | "other";
 
-export const HERO_IMAGE = "/sundaynibble/assets/hero%20image.png";
+export const HERO_IMAGE = "/assets/hero%20image.png";
 
 export interface OrderItemInput {
   flavour: FlavourId;

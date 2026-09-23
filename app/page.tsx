@@ -17,7 +17,7 @@ export default async function Home() {
         }}
       />
       <footer className="border-t border-zinc-100 py-4 text-center text-xs text-zinc-400">
-        Sunday Nibble · Samyang Buldak · sebataresources.com/sundaynibble
+        Sunday Nibble · Samyang Buldak · sundaynibble.sebataresources.com
       </footer>
     </main>
   );

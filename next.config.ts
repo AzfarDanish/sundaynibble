@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  basePath: "/sundaynibble",
+  /* Served at subdomain root: sundaynibble.sebataresources.com */
 };
 
 export default nextConfig;
