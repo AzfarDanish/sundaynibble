@@ -77,8 +77,21 @@ export function validateOrderInput(body: unknown): {
   ) {
     return { ok: false, error: "Please choose a delivery location." };
   }
-  if (delivery_details.length < 1 || delivery_details.length > 300) {
-    return { ok: false, error: "Please enter delivery details / room number." };
+  // Details are only needed for room delivery or a custom meeting point;
+  // cafeteria/lobby need nothing extra.
+  const needsDetails =
+    delivery_location_type === "door_to_door" || delivery_location_type === "other";
+  if (needsDetails && (delivery_details.length < 1 || delivery_details.length > 300)) {
+    return {
+      ok: false,
+      error:
+        delivery_location_type === "other"
+          ? "Please describe where to meet you."
+          : "Please enter your room number.",
+    };
+  }
+  if (delivery_details.length > 300) {
+    return { ok: false, error: "Delivery details are too long." };
   }
 
   // Boys are not served at Kamsis Aisyah at all — hard block.
@@ -99,15 +112,15 @@ export function validateOrderInput(body: unknown): {
     }
   }
 
-  // Room prefix rules
+  // Room prefix rules (only when details were given)
   const firstChar = delivery_details.trim().charAt(0).toUpperCase();
-  if (kamsis === "Kamsis Farabi" && firstChar !== "F") {
+  if (delivery_details.length > 0 && kamsis === "Kamsis Farabi" && firstChar !== "F") {
     return {
       ok: false,
       error: "For Kamsis Farabi, room number must start with F... (e.g. F101).",
     };
   }
-  if (kamsis === "Kamsis Khawarizmi" && firstChar !== "K") {
+  if (delivery_details.length > 0 && kamsis === "Kamsis Khawarizmi" && firstChar !== "K") {
     return {
       ok: false,
       error: "For Kamsis Khawarizmi, room number must start with K... (e.g. K205).",

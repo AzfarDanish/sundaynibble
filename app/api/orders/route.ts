@@ -44,6 +44,13 @@ export async function POST(request: Request) {
   // insert without a RETURNING select to avoid needing a SELECT policy.
   const orderId = randomUUID();
   const supabase = getSupabaseAdminClient();
+  // Cafeteria/lobby need no extra details — store the meeting point itself.
+  const detailsFallback: Record<string, string> = {
+    cafeteria: "Cafeteria",
+    lobby: "Lobby",
+  };
+  const deliveryDetails =
+    data.delivery_details || detailsFallback[data.delivery_location_type] || "";
   const { error } = await supabase.from("orders").insert({
     id: orderId,
     customer_name: data.customer_name,
@@ -51,7 +58,7 @@ export async function POST(request: Request) {
     gender: data.gender,
     kamsis: data.kamsis,
     delivery_location_type: data.delivery_location_type,
-    delivery_details: data.delivery_details,
+    delivery_details: deliveryDetails,
     notes: data.notes,
     items: data.items,
     subtotal: data.subtotal,
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
     gender: data.gender,
     kamsis: data.kamsis,
     delivery_location_type: data.delivery_location_type,
-    delivery_details: data.delivery_details,
+    delivery_details: deliveryDetails,
     notes: data.notes,
     items: data.items,
     total: data.total,

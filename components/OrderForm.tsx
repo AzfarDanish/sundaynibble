@@ -231,20 +231,29 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const nameInvalid = name.length > 0 && name.trim().length < 2;
   const phoneInvalid =
     phone.length > 0 && (phoneDigits.length < 7 || phone.length > 30);
+  const needsDetails = deliveryType === "door_to_door" || deliveryType === "other";
   const roomFirst = deliveryDetails.trim().charAt(0).toUpperCase();
   const roomInvalid =
+    needsDetails &&
     deliveryDetails.length > 0 &&
     ((kamsis === "Kamsis Farabi" && roomFirst !== "F") ||
       (kamsis === "Kamsis Khawarizmi" && roomFirst !== "K"));
 
+  function handleDeliveryChange(v: DeliveryLocationType | "") {
+    setDeliveryType(v);
+    setDeliveryDetails("");
+  }
+
   const roomHint =
-    kamsis === "Kamsis Farabi"
-      ? "Add room number starting with F... e.g. F101-2"
-      : kamsis === "Kamsis Khawarizmi"
-        ? "Add room number starting with K... e.g. K205-1"
-        : kamsis === "Kamsis Aisyah" && deliveryType === "door_to_door"
-          ? "Add block + room number for door-to-door delivery"
-          : "Free delivery at all kamsis";
+    deliveryType === "other"
+      ? "Describe where to meet you"
+      : kamsis === "Kamsis Farabi"
+        ? "Add room number starting with F... e.g. F101-2"
+        : kamsis === "Kamsis Khawarizmi"
+          ? "Add room number starting with K... e.g. K205-1"
+          : kamsis === "Kamsis Aisyah" && deliveryType === "door_to_door"
+            ? "Add block + room number for door-to-door delivery"
+            : "Free delivery at all kamsis";
 
   function changeQty(id: FlavourId, kind: "plain" | "cooked", delta: number) {
     setAmounts((prev) => {
@@ -658,75 +667,91 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                 )}
               </div>
               <div>
-                <span className="text-xs font-semibold text-zinc-700">Delivery location</span>
-                <div className="mt-2 space-y-2">
+                <span className="text-xs font-semibold text-zinc-700">Deliver to</span>
+                <div className="mt-2 space-y-1" role="radiogroup" aria-label="Deliver to">
                   {(
                     [
-                      ["cafeteria", "Cafeteria"],
-                      ["lobby", "Lobby"],
-                      ["door_to_door", "Door to door"],
-                      ["other", "Other"],
-                    ] as [DeliveryLocationType, string][]
-                  ).map(([v, label]) => {
+                      ["door_to_door", "My room — door to door", true],
+                      ["cafeteria", "Cafeteria", false],
+                      ["lobby", "Lobby", false],
+                      ["other", "Somewhere else", true],
+                    ] as [DeliveryLocationType, string, boolean][]
+                  ).map(([v, label, wantsDetails]) => {
                     const disabled = v === "door_to_door" && aisyahGirl;
+                    const expanded = deliveryType === v && wantsDetails;
                     return (
-                      <label
-                        key={v}
-                        className={`pressable flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors ${
-                          disabled
-                            ? "cursor-not-allowed text-zinc-400"
-                            : "cursor-pointer text-zinc-900 active:bg-zinc-100"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="delivery"
-                          value={v}
-                          checked={deliveryType === v}
-                          onChange={() => setDeliveryType(v)}
-                          required
-                          disabled={disabled}
-                          className="h-4 w-4 accent-red-600 disabled:opacity-40"
-                        />
-                        {label}
-                      </label>
+                      <div key={v}>
+                        <label
+                          className={`pressable flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors ${
+                            disabled
+                              ? "cursor-not-allowed text-zinc-400"
+                              : "cursor-pointer text-zinc-900 active:bg-zinc-100"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="delivery"
+                            value={v}
+                            checked={deliveryType === v}
+                            onChange={() => handleDeliveryChange(v)}
+                            required
+                            disabled={disabled}
+                            className="h-4 w-4 shrink-0 accent-red-600 disabled:opacity-40"
+                          />
+                          {label}
+                        </label>
+                        <AnimatePresence initial={false}>
+                          {expanded && (
+                            <motion.div
+                              key={`${v}-details`}
+                              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                              transition={quickSpring}
+                              className="pb-1 pl-9 pr-2"
+                            >
+                              <input
+                                value={deliveryDetails}
+                                onChange={(e) => setDeliveryDetails(e.target.value)}
+                                required
+                                maxLength={300}
+                                placeholder={
+                                  v === "other"
+                                    ? "e.g. Mosque entrance, guard post…"
+                                    : kamsis === "Kamsis Farabi"
+                                      ? "Room F101-2"
+                                      : kamsis === "Kamsis Khawarizmi"
+                                        ? "Room K205-1"
+                                        : "Block / room number"
+                                }
+                                aria-label={
+                                  v === "other" ? "Describe where to meet you" : "Room number"
+                                }
+                                aria-invalid={roomInvalid}
+                                className="w-full border-b border-zinc-300 bg-transparent py-2 text-base outline-none focus:border-red-600"
+                              />
+                              <span
+                                className={`mt-1 block text-xs ${roomInvalid ? "text-red-600" : "text-zinc-500"}`}
+                              >
+                                {roomInvalid
+                                  ? kamsis === "Kamsis Farabi"
+                                    ? "Room must start with F... e.g. F101-2"
+                                    : "Room must start with K... e.g. K205-1"
+                                  : roomHint}
+                              </span>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     );
                   })}
                 </div>
                 {aisyahGirl && (
                   <span className="mt-1 block text-xs text-red-600">
                     Sorry, no door-to-door delivery at Kamsis Aisyah — please choose Cafeteria,
-                    Lobby, or Other.
+                    Lobby, or Somewhere else.
                   </span>
                 )}
-              </div>
-              <div>
-                <label htmlFor="sn-room" className="text-xs font-semibold text-zinc-700">
-                  Room / details
-                </label>
-                <input
-                  id="sn-room"
-                  value={deliveryDetails}
-                  onChange={(e) => setDeliveryDetails(e.target.value)}
-                  required
-                  maxLength={300}
-                  placeholder={
-                    kamsis === "Kamsis Farabi"
-                      ? "F101-2"
-                      : kamsis === "Kamsis Khawarizmi"
-                        ? "K205-1"
-                        : "Block / room / meeting point"
-                  }
-                  aria-invalid={roomInvalid}
-                  className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-base outline-none focus:border-red-600"
-                />
-                <span className={`mt-1 block text-xs ${roomInvalid ? "text-red-600" : "text-zinc-500"}`}>
-                  {roomInvalid
-                    ? kamsis === "Kamsis Farabi"
-                      ? "Room must start with F... e.g. F101-2"
-                      : "Room must start with K... e.g. K205-1"
-                    : roomHint}
-                </span>
               </div>
               <div>
                 <label htmlFor="sn-notes" className="text-xs font-semibold text-zinc-700">
