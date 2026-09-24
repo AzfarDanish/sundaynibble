@@ -40,7 +40,7 @@ export function buildTelegramMessage(order: TelegramOrder): string {
   for (const item of order.items) {
     const label = FLAVOUR_LABELS[item.flavour] ?? item.flavour;
     lines.push(
-      `- ${label} x${item.quantity}${item.cooked ? " (cooked)" : ""} · ${item.spice}% spicy`
+      `- ${label} x${item.quantity}${item.cooked ? ` (cooked, ${item.spice}%)` : ""}`
     );
     if (item.note) {
       lines.push(`  Note: ${item.note}`);

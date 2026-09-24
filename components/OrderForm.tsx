@@ -117,20 +117,25 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const quickSpring = reduceMotion ? { duration: 0 } : QUICK_SPRING;
 
   const [settings, setSettings] = useState<InitialSettings>(initial);
-  // Per flavour, original and cooked-ready lines are tracked separately,
-  // each with its own quantity, spiciness (%), and note.
-  interface KindSelection {
+  // Per flavour, original and cooked-ready lines are tracked separately.
+  // Spiciness (%) applies to cooked ramen only — plain packs come as-is.
+  interface PlainSelection {
+    qty: number;
+    note: string;
+  }
+  interface CookedSelection {
     qty: number;
     spice: SpiceLevel;
     note: string;
   }
-  const emptyKind = (): KindSelection => ({ qty: 0, spice: DEFAULT_SPICE, note: "" });
+  const emptyPlain = (): PlainSelection => ({ qty: 0, note: "" });
+  const emptyCooked = (): CookedSelection => ({ qty: 0, spice: DEFAULT_SPICE, note: "" });
   const [amounts, setAmounts] = useState<
-    Record<FlavourId, { plain: KindSelection; cooked: KindSelection }>
+    Record<FlavourId, { plain: PlainSelection; cooked: CookedSelection }>
   >({
-    carbonara: { plain: emptyKind(), cooked: emptyKind() },
-    quattro_cheese: { plain: emptyKind(), cooked: emptyKind() },
-    cheese: { plain: emptyKind(), cooked: emptyKind() },
+    carbonara: { plain: emptyPlain(), cooked: emptyCooked() },
+    quattro_cheese: { plain: emptyPlain(), cooked: emptyCooked() },
+    cheese: { plain: emptyPlain(), cooked: emptyCooked() },
   });
   const [viewImage, setViewImage] = useState<{ label: string; image: string } | null>(null);
   const [name, setName] = useState("");
@@ -211,7 +216,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
             flavour: f.id,
             quantity: a.plain.qty,
             cooked: false,
-            spice: a.plain.spice,
+            spice: "100" as SpiceLevel,
             note: a.plain.note.trim(),
           });
         if (a.cooked.qty > 0)
@@ -265,15 +270,17 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
     });
   }
 
-  function setKindField(
-    id: FlavourId,
-    kind: "plain" | "cooked",
-    field: "spice" | "note",
-    value: string
-  ) {
+  function setKindNote(id: FlavourId, kind: "plain" | "cooked", value: string) {
     setAmounts((prev) => ({
       ...prev,
-      [id]: { ...prev[id], [kind]: { ...prev[id][kind], [field]: value } },
+      [id]: { ...prev[id], [kind]: { ...prev[id][kind], note: value } },
+    }));
+  }
+
+  function setCookedSpice(id: FlavourId, value: SpiceLevel) {
+    setAmounts((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], cooked: { ...prev[id].cooked, spice: value } },
     }));
   }
 
@@ -398,9 +405,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
         }
       }
       setAmounts({
-        carbonara: { plain: emptyKind(), cooked: emptyKind() },
-        quattro_cheese: { plain: emptyKind(), cooked: emptyKind() },
-        cheese: { plain: emptyKind(), cooked: emptyKind() },
+        carbonara: { plain: emptyPlain(), cooked: emptyCooked() },
+        quattro_cheese: { plain: emptyPlain(), cooked: emptyCooked() },
+        cheese: { plain: emptyPlain(), cooked: emptyCooked() },
       });
       router.push(`/order/${data.orderId}`);
     } catch {
@@ -549,37 +556,45 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                           reduceMotion={reduceMotion}
                           quickSpring={quickSpring}
                         />
-                        <div
-                          role="radiogroup"
-                          aria-label={`Spiciness for ${kind} ${f.label}`}
-                          className="mt-1 flex gap-1.5"
-                        >
-                          {SPICE_LEVELS.map((s) => {
-                            const selected = amounts[f.id][kind].spice === s.id;
-                            return (
-                              <button
-                                key={s.id}
-                                type="button"
-                                role="radio"
-                                aria-checked={selected}
-                                onClick={() =>
-                                  setKindField(f.id, kind, "spice", s.id as SpiceLevel)
-                                }
-                                className={`pressable min-w-11 px-2 py-1 text-xs font-bold tabular-nums ${
-                                  selected
-                                    ? "bg-red-600 text-white"
-                                    : "border border-zinc-300 text-zinc-600"
-                                }`}
-                              >
-                                {s.label}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {kind === "cooked" && (
+                          <div className="mt-1">
+                            <p
+                              id={`spice-label-${f.id}`}
+                              className="text-[11px] font-semibold text-zinc-700"
+                            >
+                              Spiciness — how pedas should we cook it?
+                            </p>
+                            <div
+                              role="radiogroup"
+                              aria-labelledby={`spice-label-${f.id}`}
+                              className="mt-1 flex gap-1.5"
+                            >
+                              {SPICE_LEVELS.map((s) => {
+                                const selected = amounts[f.id].cooked.spice === s.id;
+                                return (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() => setCookedSpice(f.id, s.id as SpiceLevel)}
+                                    className={`pressable min-w-11 px-2 py-1 text-xs font-bold tabular-nums ${
+                                      selected
+                                        ? "bg-red-600 text-white"
+                                        : "border border-zinc-300 text-zinc-600"
+                                    }`}
+                                  >
+                                    {s.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <input
                           value={amounts[f.id][kind].note}
                           onChange={(e) =>
-                            setKindField(f.id, kind, "note", e.target.value.slice(0, 200))
+                            setKindNote(f.id, kind, e.target.value.slice(0, 200))
                           }
                           maxLength={200}
                           placeholder={`Note for ${kind} ${f.label} (optional)`}
@@ -994,7 +1009,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                     >
                       <span className="min-w-0 break-words">
                         {FLAVOURS.find((f) => f.id === i.flavour)?.label} x{i.quantity}
-                        {i.cooked ? " · cooked" : ""} · {i.spice}%
+                        {i.cooked ? ` · cooked · ${i.spice}%` : ""}
                         {i.note ? <span className="block text-xs text-zinc-500">“{i.note}”</span> : null}
                       </span>
                       <span className="shrink-0 font-semibold tabular-nums">

@@ -168,7 +168,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                   <span className="min-w-0 break-words">
                     {(FLAVOUR_LABELS as Record<string, string>)[i.flavour] || i.flavour} x
                     {i.quantity}
-                    {i.cooked ? " · cooked" : ""} · {i.spice || "100"}%
+                    {i.cooked ? ` · cooked · ${i.spice || "100"}%` : ""}
                     {i.note ? (
                       <span className="block text-xs text-zinc-500">“{i.note}”</span>
                     ) : null}

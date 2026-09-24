@@ -292,8 +292,7 @@ export default function AdminDashboard() {
                   <li key={idx}>
                     - {(FLAVOUR_LABELS as Record<string, string>)[i.flavour] || i.flavour} x
                     {i.quantity}
-                    {i.cooked ? " (cooked)" : ""}
-                    {i.spice ? ` · ${i.spice}% spicy` : ""}
+                    {i.cooked ? ` (cooked${i.spice ? `, ${i.spice}%` : ""})` : ""}
                     {i.note ? <span className="block pl-2 text-zinc-500">Note: {i.note}</span> : null}
                   </li>
                 ))}
