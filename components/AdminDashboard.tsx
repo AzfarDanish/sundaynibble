@@ -34,6 +34,18 @@ interface Order {
 
 const STATUS = ["new", "accepted", "preparing", "delivered", "cancelled"];
 
+// "17:00:00" -> "5:00 PM" — plain preview so the admin sees the result.
+function toDisplayTime(t: string): string {
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return t;
+  let h = Number(m[1]);
+  const min = m[2];
+  const suffix = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${min} ${suffix}`;
+}
+
 export default function AdminDashboard() {
   const reduceMotion = useReducedMotion() ?? false;
   const spring = reduceMotion ? { duration: 0 } : { type: "spring", bounce: 0, duration: 0.4 } as const;
@@ -186,23 +198,41 @@ export default function AdminDashboard() {
               />
             </label>
             <label className="block text-xs font-semibold text-zinc-700">
-              Open time (HH:MM)
+              Opens at
               <input
+                type="time"
+                step={60}
                 value={settings.open_time.slice(0, 5)}
-                onChange={(e) => setSettings({ ...settings, open_time: `${e.target.value}:00` })}
-                placeholder="17:00"
-                className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-sm font-normal outline-none focus:border-red-600"
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setSettings({ ...settings, open_time: `${e.target.value}:00` });
+                }}
+                className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-base font-normal outline-none focus:border-red-600"
               />
             </label>
             <label className="block text-xs font-semibold text-zinc-700">
-              Close time (HH:MM)
+              Closes at
               <input
+                type="time"
+                step={60}
                 value={settings.close_time.slice(0, 5)}
-                onChange={(e) => setSettings({ ...settings, close_time: `${e.target.value}:00` })}
-                placeholder="23:30"
-                className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-sm font-normal outline-none focus:border-red-600"
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setSettings({ ...settings, close_time: `${e.target.value}:00` });
+                }}
+                className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-base font-normal outline-none focus:border-red-600"
               />
             </label>
+            <p className="text-xs leading-relaxed text-zinc-500 sm:col-span-2">
+              Customers will see: selling {toDisplayTime(settings.open_time)} –{" "}
+              {toDisplayTime(settings.close_time)} daily
+              {!settings.is_available
+                ? " (currently hidden — Available is off)"
+                : !settings.accepting_orders
+                  ? " (currently paused — Taking orders is off)"
+                  : ""}
+              . Tap the field above to pick a time — no typing needed.
+            </p>
             <div className="sm:col-span-2">
               <motion.button
                 onClick={saveSettings}
