@@ -152,9 +152,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             Order received!
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Order <span className="font-mono font-bold text-zinc-700">{order.orderId.slice(0, 8)}…</span>
+            Order ID
+            <span className="block break-all font-mono text-xs font-bold text-zinc-700">
+              {order.orderId}
+            </span>
             {order.createdAt
-              ? ` · ${new Date(order.createdAt).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}`
+              ? new Date(order.createdAt).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })
               : ""}
           </p>
 
@@ -208,23 +211,14 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             </p>
             {order.receipt_url && (
               <div className="mt-3">
-                {receiptIsPdf ? (
-                  <a
-                    href={order.receipt_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="pressable block border border-zinc-200 p-3 text-center text-sm font-bold text-red-600"
-                  >
-                    View your receipt (PDF)
-                  </a>
-                ) : (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={order.receipt_url}
-                    alt="Your payment receipt"
-                    className="mx-auto max-h-80 w-auto border border-zinc-200"
-                  />
-                )}
+                <a
+                  href={order.receipt_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pressable block border border-zinc-200 p-3 text-center text-sm font-bold text-red-600"
+                >
+                  View your receipt{receiptIsPdf ? " (PDF)" : ""}
+                </a>
               </div>
             )}
           </section>

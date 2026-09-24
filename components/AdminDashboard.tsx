@@ -34,6 +34,31 @@ interface Order {
 
 const STATUS = ["new", "accepted", "preparing", "delivered", "cancelled"];
 
+function statusStyle(status: string): string {
+  switch (status) {
+    case "new":
+      return "bg-red-100 text-red-700";
+    case "accepted":
+      return "bg-amber-100 text-amber-800";
+    case "preparing":
+      return "bg-blue-100 text-blue-800";
+    case "delivered":
+      return "bg-green-100 text-green-800";
+    case "cancelled":
+      return "bg-zinc-200 text-zinc-600";
+    default:
+      return "bg-zinc-100 text-zinc-600";
+  }
+}
+
+function deliveryLabelOf(value: string): string {
+  if (value === "door_to_door") return "Door to door";
+  if (value === "cafeteria") return "Cafeteria";
+  if (value === "lobby") return "Lobby";
+  if (value === "other") return "Other";
+  return value;
+}
+
 // "17:00:00" -> "5:00 PM" — plain preview so the admin sees the result.
 function toDisplayTime(t: string): string {
   const m = t.match(/^(\d{1,2}):(\d{2})/);
@@ -264,79 +289,115 @@ export default function AdminDashboard() {
             ))}
           </select>
         </div>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <AnimatePresence initial={false}>
           {orders.map((o) => (
-            <motion.div
+            <motion.article
               key={o.id}
               layout={reduceMotion ? undefined : "position"}
               initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
               transition={spring}
-              className="border-t border-zinc-200 py-3 text-sm first:border-t-0 first:pt-0"
+              className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold text-zinc-900">
-                  {o.customer_name} · {o.customer_phone}
-                </span>
-                <span className="text-xs text-zinc-500">
-                  {new Date(o.created_at).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-zinc-600">
-                {o.gender} · {o.kamsis} · {o.delivery_location_type} · {o.delivery_details}
-              </p>
-              <ul className="mt-1 text-xs text-zinc-700">
-                {(o.items || []).map((i, idx) => (
-                  <li key={idx}>
-                    - {(FLAVOUR_LABELS as Record<string, string>)[i.flavour] || i.flavour} x
-                    {i.quantity}
-                    {i.cooked ? ` (cooked${i.spice ? `, ${i.spice}%` : ""})` : ""}
-                    {i.note ? <span className="block pl-2 text-zinc-500">Note: {i.note}</span> : null}
-                  </li>
-                ))}
-              </ul>
-              {o.notes && <p className="mt-1 text-xs text-zinc-500">Notes: {o.notes}</p>}
-              <p className="mt-1 text-xs text-zinc-600">
-                Payment:{" "}
-                {o.payment_method === "cod"
-                  ? "Cash on delivery"
-                  : `Online · ${paymentQrLabel(o.pay_to || "")}`}
-                {o.receipt_url && (
-                  <>
-                    {" · "}
-                    <a
-                      href={o.receipt_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold text-red-600 underline"
-                    >
-                      View receipt
-                    </a>
-                  </>
-                )}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold text-red-600">{formatRM(Number(o.total))}</span>
-                <select
-                  value={o.status}
-                  onChange={(e) => setStatus(o.id, e.target.value)}
-                    className="border-b border-zinc-300 bg-transparent px-1 py-1 text-xs"
+              <div className="flex items-center justify-between gap-2 border-b border-zinc-100 bg-zinc-50 px-3 py-2">
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${statusStyle(o.status)}`}
                 >
-                  {STATUS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                  {o.status}
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {new Date(o.created_at).toLocaleString("en-MY", {
+                    timeZone: "Asia/Kuala_Lumpur",
+                    day: "numeric",
+                    month: "short",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
               </div>
-              <p className="mt-1 font-mono text-[10px] text-zinc-400">{o.id}</p>
-            </motion.div>
+              <div className="space-y-2 px-3 py-3">
+                <div>
+                  <p className="font-extrabold text-zinc-900">{o.customer_name}</p>
+                  <a
+                    href={`tel:${o.customer_phone.replace(/\D/g, "")}`}
+                    className="text-xs font-bold text-red-600"
+                  >
+                    {o.customer_phone}
+                  </a>
+                  <p className="mt-0.5 text-xs capitalize text-zinc-500">
+                    {o.gender} · {o.kamsis}
+                  </p>
+                </div>
+                <div className="border-t border-zinc-100 pt-2">
+                  <p className="text-xs font-bold text-zinc-700">
+                    {deliveryLabelOf(o.delivery_location_type)}
+                    <span className="font-normal text-zinc-500"> · {o.delivery_details}</span>
+                  </p>
+                  <ul className="mt-1.5 space-y-1 text-xs text-zinc-700">
+                    {(o.items || []).map((i, idx) => (
+                      <li key={idx} className="flex justify-between gap-2">
+                        <span className="min-w-0">
+                          {(FLAVOUR_LABELS as Record<string, string>)[i.flavour] || i.flavour}{" "}
+                          x{i.quantity}
+                          {i.cooked ? ` · cooked${i.spice ? ` · ${i.spice}%` : ""}` : ""}
+                          {i.note ? (
+                            <span className="block text-zinc-500">“{i.note}”</span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {o.notes && <p className="mt-1 text-xs text-zinc-500">Note: {o.notes}</p>}
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2">
+                  <div className="text-xs text-zinc-600">
+                    <p className="font-bold text-zinc-800">
+                      {o.payment_method === "cod"
+                        ? "Cash on delivery"
+                        : `Online · ${paymentQrLabel(o.pay_to || "")}`}
+                    </p>
+                    {o.receipt_url && (
+                      <a
+                        href={o.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-red-600 underline"
+                      >
+                        View receipt
+                      </a>
+                    )}
+                  </div>
+                  <p className="text-base font-extrabold text-red-600 tabular-nums">
+                    {formatRM(Number(o.total))}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2">
+                  <label className="text-[11px] font-semibold text-zinc-500">
+                    Status
+                    <select
+                      value={o.status}
+                      onChange={(e) => setStatus(o.id, e.target.value)}
+                      className="ml-2 border-b border-zinc-300 bg-transparent px-1 py-1 text-xs font-bold text-zinc-800"
+                    >
+                      {STATUS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="font-mono text-[10px] text-zinc-400" title={o.id}>
+                    {o.id.slice(0, 8)}…
+                  </p>
+                </div>
+              </div>
+            </motion.article>
           ))}
           </AnimatePresence>
           {orders.length === 0 && (
-            <p className="text-xs leading-relaxed text-zinc-500">No orders yet.</p>
+            <p className="text-xs leading-relaxed text-zinc-500 sm:col-span-2">No orders yet.</p>
           )}
         </div>
       </section>
