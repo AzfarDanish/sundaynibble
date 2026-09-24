@@ -75,3 +75,27 @@ export async function PATCH(request: Request) {
   }
   return Response.json({ ok: true, order: data });
 }
+
+export async function DELETE(request: Request) {
+  if (!(await isAuthed())) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  if (!hasServiceRoleKey()) {
+    return Response.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local." },
+      { status: 500 }
+    );
+  }
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id") || "";
+  if (!id) {
+    return Response.json({ error: "Missing order id." }, { status: 400 });
+  }
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("orders").delete().eq("id", id);
+  if (error) {
+    console.error("Order delete failed", error.message);
+    return Response.json({ error: "Failed to delete order." }, { status: 500 });
+  }
+  return Response.json({ ok: true, id });
+}

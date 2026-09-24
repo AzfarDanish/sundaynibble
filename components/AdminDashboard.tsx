@@ -236,6 +236,32 @@ export default function AdminDashboard() {
     }
   }
 
+  // Cancel deletes the order from backend and frontend. Destructive and
+  // irreversible, so the browser confirm dialog guards it.
+  async function cancelOrder(id: string, customerName: string) {
+    if (
+      !window.confirm(
+        `Cancel order from ${customerName}? This permanently deletes it.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/orders?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to delete order.");
+        return;
+      }
+      knownIds.current?.delete(id);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    } catch {
+      setError("Network error deleting order.");
+    }
+  }
+
   // Completed is final — the order leaves the New tab for History.
   async function completeOrder(id: string) {
     try {
@@ -500,20 +526,28 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2">
-                  {tab === "new" ? (
-                    <motion.button
-                      onClick={() => completeOrder(o.id)}
-                      whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                      transition={spring}
-                      className="pressable bg-green-700 px-4 py-2 text-xs font-bold text-white"
+                  <div className="flex items-center gap-2">
+                    {tab === "new" ? (
+                      <motion.button
+                        onClick={() => completeOrder(o.id)}
+                        whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                        transition={spring}
+                        className="pressable bg-green-700 px-4 py-2 text-xs font-bold text-white"
+                      >
+                        Mark completed
+                      </motion.button>
+                    ) : (
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-green-700">
+                        Completed
+                      </span>
+                    )}
+                    <button
+                      onClick={() => cancelOrder(o.id, o.customer_name)}
+                      className="pressable px-2 py-2 text-xs font-bold text-red-600"
                     >
-                      Mark completed
-                    </motion.button>
-                  ) : (
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-green-700">
-                      Completed
-                    </span>
-                  )}
+                      Cancel order
+                    </button>
+                  </div>
                   <p className="font-mono text-[10px] text-zinc-400" title={o.id}>
                     {o.id.slice(0, 8)}…
                   </p>
