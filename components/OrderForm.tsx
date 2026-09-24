@@ -11,6 +11,7 @@ import {
   HERO_IMAGE,
   PAYMENT_QRS,
   MAX_RECEIPT_BYTES,
+  SELLER_BANK_ACCOUNT,
   SPICE_LEVELS,
   calcTotals,
   formatRM,
@@ -22,6 +23,8 @@ import {
   type SpiceLevel,
 } from "@/lib/constants";
 import { getSupabaseAnonClient } from "@/lib/supabase";
+import { saveOrderSnapshot } from "@/lib/orderSnapshot";
+import { useRouter } from "next/navigation";
 import type { StoreState } from "@/lib/store";
 
 export interface InitialSettings {
@@ -108,6 +111,7 @@ function QtyStepper({
 }
 
 export default function OrderForm({ initial }: { initial: InitialSettings }) {
+  const router = useRouter();
   const reduceMotion = useReducedMotion() ?? false;
   const spring = reduceMotion ? { duration: 0 } : SPRING;
   const quickSpring = reduceMotion ? { duration: 0 } : QUICK_SPRING;
@@ -153,7 +157,6 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ orderId: string; total: number } | null>(null);
   // Shown on every visit while the shop is closed — no remembered dismissal.
   const [showClosed, setShowClosed] = useState(!initial.is_open);
 
@@ -323,7 +326,6 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setSuccess(null);
     if (items.length === 0) {
       setError("Please choose at least 1 ramen.");
       return;
@@ -366,9 +368,28 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to submit order.");
+        setSubmitting(false);
         return;
       }
-      setSuccess({ orderId: data.orderId, total: data.total });
+      saveOrderSnapshot({
+        orderId: data.orderId,
+        createdAt: new Date().toISOString(),
+        customer_name: name,
+        customer_phone: phone,
+        gender,
+        kamsis,
+        delivery_location_type: deliveryType,
+        delivery_details: deliveryDetails,
+        notes,
+        items,
+        subtotal: totals.subtotal,
+        cookedFee: totals.cookedFee,
+        deliveryFee: totals.deliveryFee,
+        total: data.total,
+        payment_method: payment,
+        receipt_url: payment === "online" ? receiptUrl : "",
+        pay_to: payment === "online" ? PAYMENT_QRS[qrIndex].id : "",
+      });
       if (!reduceMotion && typeof navigator !== "undefined" && "vibrate" in navigator) {
         try {
           navigator.vibrate(10);
@@ -381,10 +402,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
         quattro_cheese: { plain: emptyKind(), cooked: emptyKind() },
         cheese: { plain: emptyKind(), cooked: emptyKind() },
       });
-      removeReceipt();
+      router.push(`/order/${data.orderId}`);
     } catch {
       setError("Network error. Please try again.");
-    } finally {
       setSubmitting(false);
     }
   }
@@ -821,6 +841,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                       {qrIndex + 1} / {PAYMENT_QRS.length}
                     </span>
                   </p>
+                  <p className="mt-0.5 text-center text-xs text-zinc-600">
+                    Account name: <span className="font-bold">{SELLER_BANK_ACCOUNT}</span>
+                  </p>
                   <div className="relative mx-auto mt-2 w-full max-w-[240px] overflow-hidden border border-zinc-200">
                     <AnimatePresence initial={false} mode="popLayout" custom={qrDir}>
                       <motion.div
@@ -1019,19 +1042,6 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                   className="mt-3 border-l-2 border-red-600 pl-3 text-xs font-semibold leading-relaxed text-red-700"
                 >
                   {error}
-                </motion.p>
-              )}
-              {success && !error && (
-                <motion.p
-                  key={`success-${success.orderId}`}
-                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  transition={quickSpring}
-                  role="status"
-                  className="mt-3 border-l-2 border-green-600 pl-3 text-xs font-semibold leading-relaxed text-green-800"
-                >
-                  Order placed! Total {formatRM(success.total)}. Order ID: {success.orderId.slice(0, 8)}…
                 </motion.p>
               )}
             </AnimatePresence>

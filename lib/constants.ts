@@ -5,6 +5,12 @@ export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export type PaymentMethod = "online" | "cod";
 
+// Seller contact — shown on the order confirmation page and QR cards.
+export const SELLER_NAME = "Azfar Danish";
+export const SELLER_PHONE = "011-61136300";
+export const SELLER_PHONE_INTL = "601161136300";
+export const SELLER_BANK_ACCOUNT = "Azfar Danish";
+
 export interface PaymentQr {
   id: string;
   label: string;
