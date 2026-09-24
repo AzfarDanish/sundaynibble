@@ -864,6 +864,16 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                       </motion.div>
                     </AnimatePresence>
                   </div>
+                  <a
+                    href={PAYMENT_QRS[qrIndex].image}
+                    download={PAYMENT_QRS[qrIndex].file}
+                    className="pressable mx-auto mt-2 flex w-fit items-center gap-1.5 border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-700 active:border-red-600 active:text-red-700"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                      <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13.5h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Download {PAYMENT_QRS[qrIndex].label} QR
+                  </a>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     {qrIndex > 0 ? (
                       <motion.button

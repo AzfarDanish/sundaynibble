@@ -15,13 +15,14 @@ export interface PaymentQr {
   id: string;
   label: string;
   image: string;
+  file: string;
 }
 
 // Carousel order: BigPay is the main/first QR.
 export const PAYMENT_QRS: PaymentQr[] = [
-  { id: "bigpay", label: "BigPay", image: "/assets/bigpay.jpg" },
-  { id: "maybank", label: "Maybank", image: "/assets/maybank.png" },
-  { id: "tng", label: "TNG", image: "/assets/tng.jpg" },
+  { id: "bigpay", label: "BigPay", image: "/assets/bigpay.jpg", file: "sunday-nibble-bigpay-qr.jpg" },
+  { id: "maybank", label: "Maybank", image: "/assets/maybank.png", file: "sunday-nibble-maybank-qr.png" },
+  { id: "tng", label: "TNG", image: "/assets/tng.jpg", file: "sunday-nibble-tng-qr.jpg" },
 ];
 
 export const PAYMENT_QR_IDS = PAYMENT_QRS.map((q) => q.id);
