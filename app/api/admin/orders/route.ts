@@ -4,7 +4,7 @@ import { getSupabaseAdminClient, hasServiceRoleKey } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_STATUS = ["new", "accepted", "preparing", "delivered", "cancelled"];
+const ALLOWED_STATUS = ["new", "completed"];
 
 async function isAuthed(): Promise<boolean> {
   const store = await cookies();

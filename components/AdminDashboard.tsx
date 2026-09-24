@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FLAVOUR_LABELS, formatRM, paymentQrLabel } from "@/lib/constants";
 
@@ -32,22 +32,47 @@ interface Order {
   pay_to: string;
 }
 
-const STATUS = ["new", "accepted", "preparing", "delivered", "cancelled"];
+type Tab = "new" | "completed";
+
+const PAGE_TITLE = "Sunday Nibble Admin";
 
 function statusStyle(status: string): string {
   switch (status) {
     case "new":
       return "bg-red-100 text-red-700";
-    case "accepted":
-      return "bg-amber-100 text-amber-800";
-    case "preparing":
-      return "bg-blue-100 text-blue-800";
-    case "delivered":
+    case "completed":
       return "bg-green-100 text-green-800";
-    case "cancelled":
-      return "bg-zinc-200 text-zinc-600";
     default:
       return "bg-zinc-100 text-zinc-600";
+  }
+}
+
+// Short two-tone chime synthesized in code — no audio file needed.
+function playChime(): void {
+  try {
+    const w = window as unknown as {
+      webkitAudioContext?: typeof AudioContext;
+    };
+    const Ctx = window.AudioContext || w.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    [880, 1318].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.14;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+    window.setTimeout(() => void ctx.close(), 1000);
+  } catch {
+    // audio unavailable — visual notification still fires
   }
 }
 
@@ -76,16 +101,43 @@ export default function AdminDashboard() {
   const spring = reduceMotion ? { duration: 0 } : { type: "spring", bounce: 0, duration: 0.4 } as const;
   const [settings, setSettings] = useState<Settings | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<Tab>("new");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [notifOn, setNotifOn] = useState(
+    typeof Notification !== "undefined" && Notification.permission === "granted"
+  );
+  const [muted, setMuted] = useState(false);
+  const knownIds = useRef<Set<string> | null>(null);
 
-  async function load() {
-    setError("");
+  function alertNewOrder(o: Order): void {
+    if (!muted) playChime();
+    if (notifOn && typeof Notification !== "undefined") {
+      try {
+        const n = new Notification("New Sunday Nibble order", {
+          body: `${o.customer_name} · ${formatRM(Number(o.total))} · ${o.kamsis}`,
+          tag: o.id,
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch {
+        // notifications blocked — chime already fired
+      }
+    }
+    if (document.hidden) {
+      document.title = "(!) New order — Sunday Nibble Admin";
+    }
+  }
+
+  async function load(first: boolean) {
+    if (first) setError("");
     try {
       const [sRes, oRes] = await Promise.all([
         fetch("/api/admin/settings", { cache: "no-store" }),
-        fetch(`/api/admin/orders?limit=100${filter ? `&status=${filter}` : ""}`, {
+        fetch(`/api/admin/orders?limit=100&status=${tab}`, {
           cache: "no-store",
         }),
       ]);
@@ -98,21 +150,68 @@ export default function AdminDashboard() {
       setSettings(sData);
       if (!oRes.ok) {
         setError(oData.error || "Failed to load orders.");
-        setOrders([]);
+        if (first) setOrders([]);
         return;
       }
-      setOrders(oData.orders ?? []);
+      const fresh: Order[] = oData.orders ?? [];
+      if (knownIds.current === null) {
+        knownIds.current = new Set(fresh.map((o) => o.id));
+      } else if (tab === "new") {
+        for (const o of fresh) {
+          if (!knownIds.current.has(o.id)) {
+            knownIds.current.add(o.id);
+            if (!first) alertNewOrder(o);
+          }
+        }
+      }
+      setOrders(fresh);
+      setLastUpdated(
+        new Date().toLocaleTimeString("en-MY", {
+          timeZone: "Asia/Kuala_Lumpur",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
     } catch {
-      setError("Network error loading admin data.");
+      if (first) setError("Network error loading admin data.");
     }
   }
 
   useEffect(() => {
-    // Data fetch on filter change; setState happens in async callbacks.
+    // Live polling: refresh every 5s while the tab is visible.
+    // setState happens in async callbacks, never in the effect body.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
+    void load(true);
+    const id = window.setInterval(() => {
+      if (!document.hidden) void load(false);
+    }, 5000);
+    const onVis = () => {
+      if (!document.hidden) {
+        document.title = PAGE_TITLE;
+        void load(false);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+      document.title = PAGE_TITLE;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [tab]);
+
+  async function enableNotifications(): Promise<void> {
+    if (typeof Notification === "undefined") {
+      setError("This browser does not support desktop notifications.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    setNotifOn(perm === "granted");
+    if (perm !== "granted") {
+      setError("Notifications blocked — allow them in your browser site settings.");
+    }
+  }
 
   async function saveSettings() {
     if (!settings) return;
@@ -137,19 +236,20 @@ export default function AdminDashboard() {
     }
   }
 
-  async function setStatus(id: string, status: string) {
+  // Completed is final — the order leaves the New tab for History.
+  async function completeOrder(id: string) {
     try {
       const res = await fetch("/api/admin/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status: "completed" }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to update order.");
         return;
       }
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      setOrders((prev) => prev.filter((o) => o.id !== id));
     } catch {
       setError("Network error updating order.");
     }
@@ -162,14 +262,35 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold text-zinc-900">Sunday Nibble Admin</h1>
-        <button
-          onClick={logout}
-          className="pressable border-b border-zinc-300 px-1 py-1.5 text-xs font-bold text-zinc-700 hover:text-red-600"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-600" />
+            Live{lastUpdated ? ` · ${lastUpdated}` : ""}
+          </span>
+          {notifOn ? (
+            <button
+              onClick={() => setMuted((m) => !m)}
+              className="pressable border-b border-zinc-300 px-1 py-1.5 text-xs font-bold text-zinc-700 hover:text-red-600"
+            >
+              Sound: {muted ? "off" : "on"}
+            </button>
+          ) : (
+            <button
+              onClick={enableNotifications}
+              className="pressable bg-red-600 px-3 py-1.5 text-xs font-bold text-white"
+            >
+              Enable notifications
+            </button>
+          )}
+          <button
+            onClick={logout}
+            className="pressable border-b border-zinc-300 px-1 py-1.5 text-xs font-bold text-zinc-700 hover:text-red-600"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       <AnimatePresence initial={false} mode="wait">
@@ -274,20 +395,25 @@ export default function AdminDashboard() {
       </section>
 
       <section className="mt-6 border-t border-zinc-200 pt-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Latest orders ({orders.length})</h2>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border-b border-zinc-300 bg-transparent px-1 py-1.5 text-xs"
-          >
-            <option value="">All</option>
-            {STATUS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+            {tab === "new" ? `New orders (${orders.length})` : `History (${orders.length})`}
+          </h2>
+          <div className="flex gap-1" role="tablist" aria-label="Orders">
+            {(["new", "completed"] as Tab[]).map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={`pressable px-3 py-1.5 text-xs font-bold ${
+                  tab === t ? "bg-red-600 text-white" : "text-zinc-500"
+                }`}
+              >
+                {t === "new" ? "New" : "History"}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <AnimatePresence initial={false}>
@@ -374,20 +500,20 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2">
-                  <label className="text-[11px] font-semibold text-zinc-500">
-                    Status
-                    <select
-                      value={o.status}
-                      onChange={(e) => setStatus(o.id, e.target.value)}
-                      className="ml-2 border-b border-zinc-300 bg-transparent px-1 py-1 text-xs font-bold text-zinc-800"
+                  {tab === "new" ? (
+                    <motion.button
+                      onClick={() => completeOrder(o.id)}
+                      whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                      transition={spring}
+                      className="pressable bg-green-700 px-4 py-2 text-xs font-bold text-white"
                     >
-                      {STATUS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      Mark completed
+                    </motion.button>
+                  ) : (
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-green-700">
+                      Completed
+                    </span>
+                  )}
                   <p className="font-mono text-[10px] text-zinc-400" title={o.id}>
                     {o.id.slice(0, 8)}…
                   </p>
