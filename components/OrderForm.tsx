@@ -6,10 +6,12 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   BASE_PRICE,
   COOKED_FEE_PER_PACK,
+  DEFAULT_SPICE,
   FLAVOURS,
   HERO_IMAGE,
   PAYMENT_QRS,
   MAX_RECEIPT_BYTES,
+  SPICE_LEVELS,
   calcTotals,
   formatRM,
   type DeliveryLocationType,
@@ -17,6 +19,7 @@ import {
   type Gender,
   type Kamsis,
   type PaymentMethod,
+  type SpiceLevel,
 } from "@/lib/constants";
 import { getSupabaseAnonClient } from "@/lib/supabase";
 import type { StoreState } from "@/lib/store";
@@ -110,12 +113,20 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   const quickSpring = reduceMotion ? { duration: 0 } : QUICK_SPRING;
 
   const [settings, setSettings] = useState<InitialSettings>(initial);
-  // Per flavour, original and cooked-ready amounts are tracked separately,
-  // so one order can mix e.g. 2 plain + 1 cooked of the same flavour.
-  const [amounts, setAmounts] = useState<Record<FlavourId, { plain: number; cooked: number }>>({
-    carbonara: { plain: 0, cooked: 0 },
-    quattro_cheese: { plain: 0, cooked: 0 },
-    cheese: { plain: 0, cooked: 0 },
+  // Per flavour, original and cooked-ready lines are tracked separately,
+  // each with its own quantity, spiciness (%), and note.
+  interface KindSelection {
+    qty: number;
+    spice: SpiceLevel;
+    note: string;
+  }
+  const emptyKind = (): KindSelection => ({ qty: 0, spice: DEFAULT_SPICE, note: "" });
+  const [amounts, setAmounts] = useState<
+    Record<FlavourId, { plain: KindSelection; cooked: KindSelection }>
+  >({
+    carbonara: { plain: emptyKind(), cooked: emptyKind() },
+    quattro_cheese: { plain: emptyKind(), cooked: emptyKind() },
+    cheese: { plain: emptyKind(), cooked: emptyKind() },
   });
   const [viewImage, setViewImage] = useState<{ label: string; image: string } | null>(null);
   const [name, setName] = useState("");
@@ -136,6 +147,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   }
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptName, setReceiptName] = useState("");
+  const [receiptIsPdf, setReceiptIsPdf] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -170,6 +182,10 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
 
   function handleGenderChange(value: Gender | "") {
     setGender(value);
+    // Boys are not served at Kamsis Aisyah at all.
+    if (value === "boy" && kamsis === "Kamsis Aisyah") {
+      setKamsis("");
+    }
     if (kamsis === "Kamsis Aisyah" && value === "girl" && deliveryType === "door_to_door") {
       setDeliveryType("");
     }
@@ -187,8 +203,22 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
       FLAVOURS.flatMap((f) => {
         const a = amounts[f.id];
         const lines = [];
-        if (a.plain > 0) lines.push({ flavour: f.id, quantity: a.plain, cooked: false });
-        if (a.cooked > 0) lines.push({ flavour: f.id, quantity: a.cooked, cooked: true });
+        if (a.plain.qty > 0)
+          lines.push({
+            flavour: f.id,
+            quantity: a.plain.qty,
+            cooked: false,
+            spice: a.plain.spice,
+            note: a.plain.note.trim(),
+          });
+        if (a.cooked.qty > 0)
+          lines.push({
+            flavour: f.id,
+            quantity: a.cooked.qty,
+            cooked: true,
+            spice: a.cooked.spice,
+            note: a.cooked.note.trim(),
+          });
         return lines;
       }),
     [amounts]
@@ -218,16 +248,32 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
 
   function changeQty(id: FlavourId, kind: "plain" | "cooked", delta: number) {
     setAmounts((prev) => {
-      const next = Math.max(0, Math.min(20, prev[id][kind] + delta));
-      return { ...prev, [id]: { ...prev[id], [kind]: next } };
+      const next = Math.max(0, Math.min(20, prev[id][kind].qty + delta));
+      return { ...prev, [id]: { ...prev[id], [kind]: { ...prev[id][kind], qty: next } } };
     });
   }
 
+  function setKindField(
+    id: FlavourId,
+    kind: "plain" | "cooked",
+    field: "spice" | "note",
+    value: string
+  ) {
+    setAmounts((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [kind]: { ...prev[id][kind], [field]: value } },
+    }));
+  }
+
+  // Receipts come from the Files/Documents picker (not the photo gallery):
+  // images or PDF (bank apps often share PDFs to Files).
   async function handleReceiptFile(file: File | undefined) {
     if (!file) return;
     setUploadError("");
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Receipt must be an image (JPG/PNG).");
+    const isPdf =
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!file.type.startsWith("image/") && !isPdf) {
+      setUploadError("Receipt must be an image or PDF document.");
       return;
     }
     if (file.size > MAX_RECEIPT_BYTES) {
@@ -236,17 +282,18 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const ext = isPdf ? "pdf" : file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `receipt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const supabase = getSupabaseAnonClient();
       const { error: upError } = await supabase.storage
         .from("receipts")
-        .upload(path, file, { contentType: file.type || "image/jpeg" });
+        .upload(path, file, { contentType: file.type || undefined });
       if (upError) {
         setUploadError("Upload failed. Please try again.");
         return;
       }
       const { data } = supabase.storage.from("receipts").getPublicUrl(path);
+      setReceiptIsPdf(isPdf);
       setReceiptUrl(data.publicUrl);
       setReceiptName(file.name);
     } catch {
@@ -259,6 +306,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
   function removeReceipt() {
     setReceiptUrl("");
     setReceiptName("");
+    setReceiptIsPdf(false);
     setUploadError("");
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -320,9 +368,9 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
         }
       }
       setAmounts({
-        carbonara: { plain: 0, cooked: 0 },
-        quattro_cheese: { plain: 0, cooked: 0 },
-        cheese: { plain: 0, cooked: 0 },
+        carbonara: { plain: emptyKind(), cooked: emptyKind() },
+        quattro_cheese: { plain: emptyKind(), cooked: emptyKind() },
+        cheese: { plain: emptyKind(), cooked: emptyKind() },
       });
       removeReceipt();
     } catch {
@@ -443,31 +491,74 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                       className="object-contain"
                       sizes="64px"
                     />
+                    <span
+                      aria-hidden
+                      className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-zinc-300 bg-white"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                        <circle cx="5.5" cy="5.5" r="3.5" stroke="#52525b" strokeWidth="1.5" />
+                        <path d="M8.5 8.5 11 11" stroke="#52525b" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </span>
                   </motion.button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold leading-snug text-zinc-900">{f.label}</p>
-                    <QtyStepper
-                      label="Original"
-                      price={formatRM(BASE_PRICE)}
-                      value={amounts[f.id].plain}
-                      onLess={() => changeQty(f.id, "plain", -1)}
-                      onMore={() => changeQty(f.id, "plain", 1)}
-                      lessLabel={`Less original ${f.label}`}
-                      moreLabel={`More original ${f.label}`}
-                      reduceMotion={reduceMotion}
-                      quickSpring={quickSpring}
-                    />
-                    <QtyStepper
-                      label="Cooked ready"
-                      price={formatRM(BASE_PRICE + COOKED_FEE_PER_PACK)}
-                      value={amounts[f.id].cooked}
-                      onLess={() => changeQty(f.id, "cooked", -1)}
-                      onMore={() => changeQty(f.id, "cooked", 1)}
-                      lessLabel={`Less cooked ${f.label}`}
-                      moreLabel={`More cooked ${f.label}`}
-                      reduceMotion={reduceMotion}
-                      quickSpring={quickSpring}
-                    />
+                    {(["plain", "cooked"] as const).map((kind) => (
+                      <div key={kind} className="mt-1 border-t border-zinc-100 pt-1.5 first:mt-1.5">
+                        <QtyStepper
+                          label={kind === "plain" ? "Original" : "Cooked ready"}
+                          price={
+                            kind === "plain"
+                              ? formatRM(BASE_PRICE)
+                              : formatRM(BASE_PRICE + COOKED_FEE_PER_PACK)
+                          }
+                          value={amounts[f.id][kind].qty}
+                          onLess={() => changeQty(f.id, kind, -1)}
+                          onMore={() => changeQty(f.id, kind, 1)}
+                          lessLabel={`Less ${kind} ${f.label}`}
+                          moreLabel={`More ${kind} ${f.label}`}
+                          reduceMotion={reduceMotion}
+                          quickSpring={quickSpring}
+                        />
+                        <div
+                          role="radiogroup"
+                          aria-label={`Spiciness for ${kind} ${f.label}`}
+                          className="mt-1 flex gap-1.5"
+                        >
+                          {SPICE_LEVELS.map((s) => {
+                            const selected = amounts[f.id][kind].spice === s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                onClick={() =>
+                                  setKindField(f.id, kind, "spice", s.id as SpiceLevel)
+                                }
+                                className={`pressable min-w-11 px-2 py-1 text-xs font-bold tabular-nums ${
+                                  selected
+                                    ? "bg-red-600 text-white"
+                                    : "border border-zinc-300 text-zinc-600"
+                                }`}
+                              >
+                                {s.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <input
+                          value={amounts[f.id][kind].note}
+                          onChange={(e) =>
+                            setKindField(f.id, kind, "note", e.target.value.slice(0, 200))
+                          }
+                          maxLength={200}
+                          placeholder={`Note for ${kind} ${f.label} (optional)`}
+                          aria-label={`Note for ${kind} ${f.label}`}
+                          className="mt-1 w-full border-b border-zinc-200 bg-transparent py-1 text-xs outline-none placeholder:text-zinc-400 focus:border-red-600"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </motion.li>
               ))}
@@ -554,10 +645,17 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                   className="mt-1 w-full border-b border-zinc-300 bg-transparent px-0 py-2 text-base outline-none focus:border-red-600"
                 >
                   <option value="">Choose…</option>
-                  <option value="Kamsis Aisyah">Kamsis Aisyah</option>
+                  <option value="Kamsis Aisyah" disabled={gender === "boy"}>
+                    Kamsis Aisyah{gender === "boy" ? " (girls only)" : ""}
+                  </option>
                   <option value="Kamsis Farabi">Kamsis Farabi</option>
                   <option value="Kamsis Khawarizmi">Kamsis Khawarizmi</option>
                 </select>
+                {gender === "boy" && (
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Sorry, we don&apos;t deliver to Kamsis Aisyah for boys.
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-xs font-semibold text-zinc-700">Delivery location</span>
@@ -762,10 +860,10 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                     <input
                       ref={fileRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,application/pdf"
                       onChange={(e) => handleReceiptFile(e.target.files?.[0])}
                       className="hidden"
-                      aria-label="Upload payment receipt"
+                      aria-label="Upload payment receipt from your files"
                     />
                     {!receiptUrl ? (
                       <button
@@ -774,22 +872,36 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                         disabled={uploading}
                         className="pressable w-full border border-dashed border-zinc-400 px-4 py-3 text-sm font-bold text-zinc-700 active:border-red-600 active:text-red-700 disabled:opacity-50"
                       >
-                        {uploading ? "Uploading…" : "Upload receipt (JPG/PNG, max 5MB)"}
+                        {uploading
+                          ? "Uploading…"
+                          : "Choose receipt file (image or PDF, max 5MB)"}
                       </button>
                     ) : (
                       <div className="flex items-center gap-3 border border-zinc-200 p-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={receiptUrl} alt="Receipt preview" className="h-14 w-14 object-cover" />
+                        {receiptIsPdf ? (
+                          <span
+                            aria-hidden
+                            className="flex h-14 w-14 shrink-0 items-center justify-center bg-zinc-100 text-xs font-extrabold text-red-600"
+                          >
+                            PDF
+                          </span>
+                        ) : (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={receiptUrl} alt="Receipt preview" className="h-14 w-14 object-cover" />
+                        )}
                         <p className="min-w-0 flex-1 truncate text-xs text-zinc-600">{receiptName}</p>
                         <button
                           type="button"
                           onClick={removeReceipt}
-                          className="shrink-0 px-2 py-1 text-xs font-bold text-red-600"
+                          className="pressable shrink-0 px-2 py-1 text-xs font-bold text-red-600"
                         >
                           Remove
                         </button>
                       </div>
                     )}
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                      Pick the file from your documents — e.g. a bank-app receipt saved to Files.
+                    </p>
                     {uploadError && (
                       <p role="alert" className="mt-2 text-xs font-semibold text-red-600">
                         {uploadError}
@@ -815,7 +927,7 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                 <AnimatePresence initial={false}>
                   {items.map((i) => (
                     <motion.li
-                      key={`${i.flavour}-${i.cooked}`}
+                      key={`${i.flavour}-${i.cooked}-${i.spice}-${i.note}`}
                       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                       animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
@@ -824,9 +936,10 @@ export default function OrderForm({ initial }: { initial: InitialSettings }) {
                     >
                       <span className="min-w-0 break-words">
                         {FLAVOURS.find((f) => f.id === i.flavour)?.label} x{i.quantity}
-                        {i.cooked ? " (cooked)" : ""}
+                        {i.cooked ? " · cooked" : ""} · {i.spice}%
+                        {i.note ? <span className="block text-xs text-zinc-500">“{i.note}”</span> : null}
                       </span>
-                      <span className="font-semibold tabular-nums">
+                      <span className="shrink-0 font-semibold tabular-nums">
                         {formatRM(i.quantity * BASE_PRICE + (i.cooked ? i.quantity * COOKED_FEE_PER_PACK : 0))}
                       </span>
                     </motion.li>

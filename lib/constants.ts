@@ -80,7 +80,23 @@ export interface OrderItemInput {
   flavour: FlavourId;
   quantity: number;
   cooked: boolean;
+  spice: SpiceLevel;
+  note: string;
 }
+
+// Spiciness is shown as percentages, not words.
+export const SPICE_LEVELS = [
+  { id: "100", label: "100%" },
+  { id: "75", label: "75%" },
+  { id: "50", label: "50%" },
+  { id: "25", label: "25%" },
+] as const;
+
+export type SpiceLevel = (typeof SPICE_LEVELS)[number]["id"];
+
+export const SPICE_IDS: string[] = SPICE_LEVELS.map((s) => s.id);
+
+export const DEFAULT_SPICE: SpiceLevel = "100";
 
 export function formatRM(value: number): string {
   return `RM${value.toFixed(2)}`;

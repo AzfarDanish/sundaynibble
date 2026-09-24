@@ -22,7 +22,7 @@ interface Order {
   delivery_location_type: string;
   delivery_details: string;
   notes: string;
-  items: { flavour: string; quantity: number; cooked: boolean }[];
+  items: { flavour: string; quantity: number; cooked: boolean; spice?: string; note?: string }[];
   subtotal: number;
   cooked_fee: number;
   total: number;
@@ -263,6 +263,8 @@ export default function AdminDashboard() {
                     - {(FLAVOUR_LABELS as Record<string, string>)[i.flavour] || i.flavour} x
                     {i.quantity}
                     {i.cooked ? " (cooked)" : ""}
+                    {i.spice ? ` · ${i.spice}% spicy` : ""}
+                    {i.note ? <span className="block pl-2 text-zinc-500">Note: {i.note}</span> : null}
                   </li>
                 ))}
               </ul>

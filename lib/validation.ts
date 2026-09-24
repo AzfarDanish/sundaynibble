@@ -1,6 +1,7 @@
 import {
   FLAVOUR_IDS,
   PAYMENT_QR_IDS,
+  SPICE_IDS,
   calcTotals,
   type DeliveryLocationType,
   type FlavourId,
@@ -8,6 +9,7 @@ import {
   type Kamsis,
   type OrderItemInput,
   type PaymentMethod,
+  type SpiceLevel,
 } from "./constants";
 
 export interface OrderInput {
@@ -79,6 +81,14 @@ export function validateOrderInput(body: unknown): {
     return { ok: false, error: "Please enter delivery details / room number." };
   }
 
+  // Boys are not served at Kamsis Aisyah at all — hard block.
+  if (kamsis === "Kamsis Aisyah" && gender === "boy") {
+    return {
+      ok: false,
+      error: "Sorry, we don't deliver to Kamsis Aisyah for boys.",
+    };
+  }
+
   // Aisyah girl rule: no door-to-door (cafeteria, lobby, or other only)
   if (kamsis === "Kamsis Aisyah" && gender === "girl") {
     if (delivery_location_type === "door_to_door") {
@@ -115,16 +125,16 @@ export function validateOrderInput(body: unknown): {
     const flavour = String(r.flavour ?? "") as FlavourId;
     const quantity = Number(r.quantity);
     const cooked = Boolean(r.cooked);
+    const spice = String(r.spice ?? "");
+    const note = String(r.note ?? "").trim().slice(0, 200);
     if (!FLAVOUR_IDS.includes(flavour)) continue;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
       return { ok: false, error: "Quantity must be between 1 and 20 per flavour." };
     }
-    const existing = items.find((i) => i.flavour === flavour && i.cooked === cooked);
-    if (existing) {
-      existing.quantity += quantity;
-    } else {
-      items.push({ flavour, quantity, cooked });
+    if (!SPICE_IDS.includes(spice)) {
+      return { ok: false, error: "Please choose a spiciness level for each ramen." };
     }
+    items.push({ flavour, quantity, cooked, spice: spice as SpiceLevel, note });
   }
 
   if (items.length === 0) {

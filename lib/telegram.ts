@@ -39,7 +39,12 @@ export function buildTelegramMessage(order: TelegramOrder): string {
   lines.push("Items:");
   for (const item of order.items) {
     const label = FLAVOUR_LABELS[item.flavour] ?? item.flavour;
-    lines.push(`- ${label} x${item.quantity}${item.cooked ? ", cooked ready" : ""}`);
+    lines.push(
+      `- ${label} x${item.quantity}${item.cooked ? " (cooked)" : ""} · ${item.spice}% spicy`
+    );
+    if (item.note) {
+      lines.push(`  Note: ${item.note}`);
+    }
   }
   lines.push("");
   lines.push(`Total: ${formatRM(order.total)}`);
