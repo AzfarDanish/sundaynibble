@@ -105,15 +105,15 @@ export default function AdminDashboard() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
-  const [notifOn, setNotifOn] = useState(
-    typeof Notification !== "undefined" && Notification.permission === "granted"
-  );
+  // Notification.permission differs between server and client, so start
+  // neutral and resolve it after mount to keep SSR and first client render equal.
+  const [notifState, setNotifState] = useState<"unknown" | "granted" | "unsupported" | "default" | "denied">("unknown");
   const [muted, setMuted] = useState(false);
   const knownIds = useRef<Set<string> | null>(null);
 
   function alertNewOrder(o: Order): void {
     if (!muted) playChime();
-    if (notifOn && typeof Notification !== "undefined") {
+    if (notifState === "granted" && typeof Notification !== "undefined") {
       try {
         const n = new Notification("New Sunday Nibble order", {
           body: `${o.customer_name} · ${formatRM(Number(o.total))} · ${o.kamsis}`,
@@ -179,6 +179,16 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
+    // Resolve after mount so server and client render the same markup.
+    const id = window.setTimeout(() => {
+      setNotifState(
+        typeof Notification === "undefined" ? "unsupported" : Notification.permission
+      );
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
     // Live polling: refresh every 5s while the tab is visible.
     // setState happens in async callbacks, never in the effect body.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -203,11 +213,12 @@ export default function AdminDashboard() {
 
   async function enableNotifications(): Promise<void> {
     if (typeof Notification === "undefined") {
+      setNotifState("unsupported");
       setError("This browser does not support desktop notifications.");
       return;
     }
     const perm = await Notification.requestPermission();
-    setNotifOn(perm === "granted");
+    setNotifState(perm);
     if (perm !== "granted") {
       setError("Notifications blocked — allow them in your browser site settings.");
     }
@@ -295,14 +306,14 @@ export default function AdminDashboard() {
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-600" />
             Live{lastUpdated ? ` · ${lastUpdated}` : ""}
           </span>
-          {notifOn ? (
+          {notifState === "unknown" ? null : notifState === "granted" ? (
             <button
               onClick={() => setMuted((m) => !m)}
               className="pressable border-b border-zinc-300 px-1 py-1.5 text-xs font-bold text-zinc-700 hover:text-red-600"
             >
               Sound: {muted ? "off" : "on"}
             </button>
-          ) : (
+          ) : notifState === "unsupported" ? null : (
             <button
               onClick={enableNotifications}
               className="pressable bg-red-600 px-3 py-1.5 text-xs font-bold text-white"
